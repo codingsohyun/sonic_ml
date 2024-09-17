@@ -1,0 +1,11 @@
+flask==1.1.2
+flask-cors==3.0.10
+opencv-python==4.5.3.56  
+mediapipe==0.10.14
+scikit-learn==0.24.2
+numpy<2
+pybind11>=2.12
+Jinja2==2.11.3
+MarkupSafe==2.0.1
+itsdangerous==2.0.1
+Werkzeug==2.0.3
