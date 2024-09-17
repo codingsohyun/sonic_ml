@@ -31,7 +31,7 @@ def save_data_for_all_classes(video_dir):
     all_labels = []
 
     # 각 클래스별로 폴더를 순회하며 데이터를 처리
-    for label, class_dir in enumerate(os.listdir(video_dir)):
+    for label, class_dir in enumerate(sorted(os.listdir(video_dir))):
         class_path = os.path.join(video_dir, class_dir)
         
         if os.path.isdir(class_path):  # 폴더인지 확인
@@ -47,7 +47,7 @@ def save_data_for_all_classes(video_dir):
     return np.array(all_data), np.array(all_labels)
 
 # 데이터셋 처리 및 저장
-video_dir = 'D:/sonic_ml/sonic/raw_dataset/' 
+video_dir = 'D:/sonic_ml/sonic/raw_dataset/letters'  # 각 클래스 폴더가 위치한 경로
 data, labels = save_data_for_all_classes(video_dir)
 
 np.save('hand_joint_data.npy', data)
