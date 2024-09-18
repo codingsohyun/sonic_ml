@@ -1,9 +1,6 @@
-from flask import Flask, render_template, Response
 import cv2
 import mediapipe as mp
-from finger_recon import recognize_finger_spelling  # 이 함수는 유사도를 반환해야 함
-
-app = Flask(__name__)
+from finger_spelling.finger_recon import recognize_finger_spelling  # 이 함수는 유사도를 반환해야 함
 
 # MediaPipe 손 인식 모델 초기화
 mp_hands = mp.solutions.hands
@@ -57,14 +54,3 @@ def gen_frames():
             frame = buffer.tobytes()
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/video_feed')
-def video_feed():
-    return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-if __name__ == "__main__":
-    app.run(debug=True, port=5000)
