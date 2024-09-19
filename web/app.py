@@ -1,8 +1,9 @@
 from flask import Flask, render_template, Response, jsonify, request
 import threading
-from streams.finger_stream import finger_frames  # 프레임 생성 및 유사도 반환
-from models.finger.finger_recon import finger_inference 
-from models.body.body_recon import body_inference 
+from streams.finger_stream import finger_stream  
+from streams.body_stream import body_stream
+from models.finger.finger_inference import finger_inference 
+from models.body.body_inference import body_inference 
 
 app = Flask(__name__)
 
@@ -10,9 +11,13 @@ app = Flask(__name__)
 def index():
     return render_template('index.html')
 
-# @app.route('/video_feed')
-# def video_feed():
-#     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+@app.route('/video_feed_finger')
+def video_feed_finger():
+    return Response(finger_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/video_feed_body')
+def video_feed_body():
+    return Response(body_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def time_limit(result_event, response_data):
     # 15초 대기
@@ -34,7 +39,7 @@ def finger_learn():
     result = 1 if predicted_class == finger_id else 0
     # 확인..
     print(result)
-    return jsonify({'result': result})
+    return render_template('finger_learn.html', result=result, video_feed_url='/video_feed_finger')
 
 # 지문자 퀴즈 
 @app.route('/finger_quiz', methods=['POST'])
@@ -59,7 +64,7 @@ def finger_quiz():
 
     result_event.set()
 
-    return jsonify(response_data)
+    return render_template('finger_learn.html', result=result, video_feed_url='/video_feed_finger')
 
 # 단어 배우기
 @app.route('/body_learn', methods=['POST'])
@@ -75,7 +80,7 @@ def body_learn():
     # 맞았으면 1, 틀렸으면 0이라고 연송이한테 넘겨주기
     result = 1 if predicted_class == body_id else 0
 
-    return jsonify({'result': result})
+    return render_template('body_learn.html', result=result, video_feed_url='/video_feed_body')
 
 # 단어 퀴즈 
 @app.route('/body_quiz', methods=['POST'])
@@ -100,7 +105,7 @@ def body_quiz():
 
     result_event.set()
 
-    return jsonify(response_data)
+    return render_template('body_quiz.html', result=response_data['result'], video_feed_url='/video_feed_body')
 
 
 if __name__ == "__main__":
