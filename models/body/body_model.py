@@ -1,12 +1,25 @@
-import numpy as np
 import os
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.optimizers import Adam
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
-from tensorflow.keras.utils import to_categorical
+from torch.nn.utils.rnn import pad_sequence
+from sklearn.utils import shuffle
+
+# 데이터셋 정의
+class SignLanguageDataset(Dataset):
+    def __init__(self, features, labels):
+        self.features = features
+        self.labels = labels
+
+    def __len__(self):
+        return len(self.features)
+
+    def __getitem__(self, idx):
+        return self.features[idx], self.labels[idx]
 
 # 데이터 로드 함수
 def load_features_and_labels(dataset_dir):
@@ -24,61 +37,105 @@ def load_features_and_labels(dataset_dir):
         for feature_file in feature_files:
             feature_path = os.path.join(class_dir, feature_file)
             feature_data = np.load(feature_path, allow_pickle=True)
-            
+
             # 특징 데이터와 해당 레이블(클래스) 저장
-            features.append(feature_data)
+            features.append(torch.tensor(feature_data, dtype=torch.float32))
             labels.append(word_class)
 
-    return np.array(features), np.array(labels)
+    return features, labels
 
-# LSTM 모델 생성 함수
-def create_lstm_model(input_shape, num_classes):
-    model = Sequential()
+# LSTM 모델 정의
+class LSTMModel(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, num_classes):
+        super(LSTMModel, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, num_classes)
 
-    # LSTM 레이어 (특징의 시퀀스를 학습)
-    model.add(LSTM(128, return_sequences=True, input_shape=input_shape))
-    model.add(Dropout(0.5))
+    def forward(self, x):
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
+        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
+        out, _ = self.lstm(x, (h0, c0))
+        out = self.fc(out[:, -1, :])  # 마지막 타임스텝의 출력을 사용
+        return out
 
-    model.add(LSTM(128, return_sequences=False))
-    model.add(Dropout(0.5))
-
-    # 출력 레이어
-    model.add(Dense(128, activation='relu'))
-    model.add(Dense(num_classes, activation='softmax'))
-
-    return model
+# 데이터셋 패딩 함수
+def pad_collate_fn(batch):
+    features, labels = zip(*batch)
+    features_padded = pad_sequence(features, batch_first=True)
+    labels_tensor = torch.tensor(labels, dtype=torch.long)
+    return features_padded, labels_tensor
 
 # 메인 실행 부분
 if __name__ == "__main__":
-    dataset_path = r'D:\sonic_ml\raw_dataset\words'
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    dataset_path = r'D:/sonic_ml/raw_dataset/words'
 
     # 특징과 레이블 로드
     features, labels = load_features_and_labels(dataset_path)
 
-    # 각 시퀀스의 길이를 맞추기 위한 패딩 (최대 길이에 맞추기)
-    max_sequence_length = max(len(f) for f in features)
-    padded_features = tf.keras.preprocessing.sequence.pad_sequences(features, maxlen=max_sequence_length, padding='post', dtype='float32')
-
     # 레이블을 숫자로 변환
     label_encoder = LabelEncoder()
     integer_encoded_labels = label_encoder.fit_transform(labels)
-    categorical_labels = to_categorical(integer_encoded_labels)
+    labels_tensor = torch.tensor(integer_encoded_labels, dtype=torch.long)
 
     # 학습셋과 테스트셋 분리
-    X_train, X_test, y_train, y_test = train_test_split(padded_features, categorical_labels, test_size=0.2, random_state=42)
+    features, labels = shuffle(features, integer_encoded_labels)
+    X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
+
+    # DataLoader 생성
+    train_dataset = SignLanguageDataset(X_train, y_train)
+    test_dataset = SignLanguageDataset(X_test, y_test)
+
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, collate_fn=pad_collate_fn)
+    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, collate_fn=pad_collate_fn)
 
     # 모델 생성
-    input_shape = (max_sequence_length, padded_features.shape[2])  # 시퀀스 길이와 특징 차원
+    input_size = X_train[0].shape[1]  # 특징 차원 수
+    hidden_size = 128
+    num_layers = 2
     num_classes = len(np.unique(labels))
-    model = create_lstm_model(input_shape, num_classes)
 
-    # 모델 컴파일
-    model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
+    model = LSTMModel(input_size, hidden_size, num_layers, num_classes).to(device)
+
+    # 손실 함수 및 옵티마이저 설정
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # 모델 학습
-    model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_test, y_test))
+    num_epochs = 50
+    for epoch in range(num_epochs):
+        model.train()
+        for features, labels in train_loader:
+            features, labels = features.to(device), labels.to(device)
+
+            # Forward
+            outputs = model(features)
+            loss = criterion(outputs, labels)
+
+            # Backward and optimize
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
+
+    # 테스트
+    model.eval()
+    with torch.no_grad():
+        correct = 0
+        total = 0
+        for features, labels in test_loader:
+            features, labels = features.to(device), labels.to(device)
+            outputs = model(features)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+        print(f'Accuracy of the model on the test data: {100 * correct / total:.2f}%')
 
     # 모델 저장
-    model.save('lstm_sign_language_model.h5')
-
-    print("Model training complete and saved as 'lstm_sign_language_model.h5'")
+    torch.save(model.state_dict(), 'lstm_sign_language_model.pth')
+    print("yeahhhh")
