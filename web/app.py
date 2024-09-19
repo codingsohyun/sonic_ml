@@ -1,6 +1,6 @@
 from flask import Flask, render_template, Response, jsonify, request
 import threading
-from streams.finger_stream import gen_frames  # 프레임 생성 및 유사도 반환
+from streams.finger_stream import finger_frames  # 프레임 생성 및 유사도 반환
 from models.finger.finger_recon import finger_inference 
 from models.body.body_recon import body_inference 
 
@@ -10,9 +10,9 @@ app = Flask(__name__)
 def index():
     return render_template('index.html')
 
-@app.route('/video_feed')
-def video_feed():
-    return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+# @app.route('/video_feed')
+# def video_feed():
+#     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def time_limit(result_event, response_data):
     # 15초 대기
