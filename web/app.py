@@ -1,6 +1,5 @@
 from flask import Flask, render_template, Response, jsonify, request
 import threading
-import time
 from streams.finger_stream import gen_frames  # 프레임 생성 및 유사도 반환
 from models.finger.finger_recon import finger_inference 
 from models.body.body_recon import body_inference 
