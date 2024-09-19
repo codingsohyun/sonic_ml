@@ -16,7 +16,6 @@ def finger_frames():
         if not success:
             break
         else:
-            # BGR에서 RGB로 변환
             image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = hands.process(image_rgb)
             
@@ -31,10 +30,8 @@ def finger_frames():
                         drawing_spec_connections
                     )
 
-            # 손 관절 인식 후 지문자 예측 및 유사도 측정
             similarity = finger_inference(frame)
             
-            # 유사도에 따라 화면에 결과 출력
             if similarity == 100:
                 display_text = "Match"
             else:
