@@ -1,20 +1,14 @@
 import os
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
+from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils.rnn import pad_sequence
-from sklearn.utils import shuffle
-from model_hyperparameter_tuning import hyperparameter_tuning  # 추가된 부분
+from sklearn.model_selection import train_test_split
 
-# 데이터셋 정의
 class SignLanguageDataset(Dataset):
     def __init__(self, features, labels):
-        self.features = features
-        self.labels = labels
+        self.features = [torch.tensor(f, dtype=torch.float32) for f in features]
+        self.labels = torch.tensor(labels, dtype=torch.long)
 
     def __len__(self):
         return len(self.features)
@@ -22,73 +16,94 @@ class SignLanguageDataset(Dataset):
     def __getitem__(self, idx):
         return self.features[idx], self.labels[idx]
 
-# 데이터 로드 함수
-def load_features_and_labels(dataset_dir):
-    features = []
-    labels = []
+def collate_fn(batch):
+    features, labels = zip(*batch)
+    features_padded = pad_sequence(features, batch_first=True)  # 시퀀스 길이에 맞게 패딩
+    labels = torch.tensor(labels, dtype=torch.long)
+    return features_padded, labels
 
-    word_classes = os.listdir(dataset_dir)
-    for word_class in word_classes:
-        class_dir = os.path.join(dataset_dir, word_class)
-        if not os.path.isdir(class_dir):
-            continue
-
-        feature_files = [f for f in os.listdir(class_dir) if f.endswith('_features.npy')]
-        for feature_file in feature_files:
-            feature_path = os.path.join(class_dir, feature_file)
-            feature_data = np.load(feature_path, allow_pickle=True)
-
-            features.append(torch.tensor(feature_data, dtype=torch.float32))
-            labels.append(word_class)
-
+def load_data():
+    data_path = '/mnt/8TB_2/sohyun/sonic/sonic_ml/outputs'
+    features_file = os.path.join(data_path, 'body_joint_data.npy')
+    labels_file = os.path.join(data_path, 'body_labels.npy')
+    
+    if not os.path.exists(features_file) or not os.path.exists(labels_file):
+        raise FileNotFoundError("Data files are not found. Please check the path.")
+    
+    features = np.load(features_file, allow_pickle=True)
+    labels = np.load(labels_file, allow_pickle=True)
+    
+    print(f"Loaded features shape: {features.shape}")
+    print(f"Loaded labels shape: {labels.shape}")
+    
     return features, labels
 
-# LSTM 모델 정의
-class LSTMModel(nn.Module):
+class LSTMModel(torch.nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_classes):
         super(LSTMModel, self).__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size, num_classes)
-
+        self.lstm = torch.nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc = torch.nn.Linear(hidden_size, num_classes)
+    
     def forward(self, x):
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
-        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
-        out, _ = self.lstm(x, (h0, c0))
+        h_0 = torch.zeros(2, x.size(0), 256).to(x.device)
+        c_0 = torch.zeros(2, x.size(0), 256).to(x.device)
+        out, _ = self.lstm(x, (h_0, c_0))
         out = self.fc(out[:, -1, :])
         return out
 
-# 데이터셋 패딩 함수
-def pad_collate_fn(batch):
-    features, labels = zip(*batch)
-    features_padded = pad_sequence(features, batch_first=True)
-    labels_tensor = torch.tensor(labels, dtype=torch.long)
-    return features_padded, labels_tensor
+def train_model(features, labels):
+    X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
+    train_dataset = SignLanguageDataset(X_train, y_train)
+    test_dataset = SignLanguageDataset(X_test, y_test)
+
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, collate_fn=collate_fn)
+
+    input_size = X_train[0].shape[1]  # 조인트 데이터의 크기 설정
+    model = LSTMModel(input_size=input_size, hidden_size=256, num_layers=2, num_classes=10)
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    criterion = torch.nn.CrossEntropyLoss()
+
+    # 첫 번째 가중치 확인을 위한 텐서 (lstm 가중치)
+    lstm_weight_tensor = model.lstm.weight_ih_l0
+
+    for epoch in range(10):
+        model.train()
+        epoch_loss = 0
+        for data, target in train_loader:
+            data, target = data.to(device), target.to(device)
+            optimizer.zero_grad()
+            output = model(data)
+            loss = criterion(output, target)
+            loss.backward()
+            optimizer.step()
+
+            epoch_loss += loss.item()
+
+        avg_loss = epoch_loss / len(train_loader)
+        print(f'Epoch {epoch+1}, Average Loss: {avg_loss}')
+
+        # LSTM 첫 번째 레이어의 가중치 일부를 출력
+        print(f"Epoch {epoch+1}, LSTM Weight Sample (First Layer): {lstm_weight_tensor[0][:5]}")
+
+        # 평가
+        model.eval()
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for data, target in test_loader:
+                data, target = data.to(device), target.to(device)
+                output = model(data)
+                _, predicted = torch.max(output, 1)
+                total += target.size(0)
+                correct += (predicted == target).sum().item()
+        accuracy = 100 * correct / total
+        print(f'Accuracy: {accuracy:.2f}%')
 
 if __name__ == "__main__":
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    dataset_path = r'D:/sonic_ml/raw_dataset/words'
-    features, labels = load_features_and_labels(dataset_path)
-
-    label_encoder = LabelEncoder()
-    integer_encoded_labels = label_encoder.fit_transform(labels)
-    features, labels = shuffle(features, integer_encoded_labels)
-    X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
-
-    input_size = X_train[0].shape[1] if len(X_train) > 0 else 0
-    num_classes = len(np.unique(labels))
-
-    # 하이퍼파라미터 범위 설정
-    param_grid = {
-        'hidden_size': [64, 128, 256],
-        'num_layers': [1, 2, 3],
-        'learning_rate': [0.001, 0.0001],
-        'batch_size': [16, 32, 64],
-        'epochs': [10, 20]
-    }
-
-    # 하이퍼파라미터 튜닝 실행
-    best_params, best_accuracy = hyperparameter_tuning(X_train, y_train, param_grid, input_size, num_classes)
-    print(f"Best params: {best_params}, Best accuracy: {best_accuracy:.4f}")
+    features, labels = load_data()
+    train_model(features, labels)
