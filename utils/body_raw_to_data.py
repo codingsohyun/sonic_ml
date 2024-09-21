@@ -2,7 +2,7 @@ import cv2
 import mediapipe as mp
 import os
 import numpy as np
-from data_augmentation import augment_image  
+from data_augmentation import augment_video_frames  # 추가
 
 mp_hands = mp.solutions.hands
 mp_pose = mp.solutions.pose
@@ -19,7 +19,6 @@ def extract_features_from_video(video_path, augment=False, num_augments=5):
         if not ret:
             break
 
-        # BGR 이미지를 RGB로 변환
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame_list.append(frame_rgb)  # 증강을 위해 원본 프레임 저장
 
@@ -28,11 +27,7 @@ def extract_features_from_video(video_path, augment=False, num_augments=5):
 
     # 데이터 증강 여부에 따라 증강된 프레임 생성
     if augment:
-        augmented_frames = []
-        for _ in range(num_augments):
-            for frame_rgb in frame_list:
-                augmented_frames.append(augment_image(frame_rgb))  # augmentation 이미지 추가
-        frame_list = augmented_frames  
+        frame_list = augment_video_frames(frame_list, num_augments=num_augments)
 
     # 프레임별 특징 추출
     for frame_rgb in frame_list:
@@ -55,7 +50,6 @@ def extract_features_from_video(video_path, augment=False, num_augments=5):
             features.append(frame_features)
 
     return features
-
 
 def process_dataset(dataset_dir, augment=False, num_augments=5):
 
@@ -83,4 +77,4 @@ def process_dataset(dataset_dir, augment=False, num_augments=5):
 
 if __name__ == "__main__": 
     dataset_path = r'D:/sonic_ml/raw_dataset/words'
-    process_dataset(dataset_path, augment=True, num_augments=5) 
+    process_dataset(dataset_path, augment=True, num_augments=5)
