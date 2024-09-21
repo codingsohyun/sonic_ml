@@ -1,9 +1,13 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from flask import Flask, render_template, Response, jsonify, request
 import threading
-from streams.finger_stream import finger_stream  
+from streams.finger_stream import finger_stream
 from streams.body_stream import body_stream
-from models.finger.finger_inference import finger_inference 
-from models.body.body_inference import body_inference 
+from models.finger.finger_inference import finger_inference
+from models.body.body_inference import body_inference
 
 app = Flask(__name__)
 
