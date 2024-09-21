@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 import random
 
 def augment_image(image):
@@ -23,6 +24,6 @@ def augment_video_frames(frame_list, num_augments=5):
     
     for _ in range(num_augments):
         augmented_frames = [augment_image(frame) for frame in frame_list]
-        augmented_videos.append(augmented_frames)
+        augmented_videos.append(np.array(augmented_frames))  # 차원 유지 위해 np.array 사용
     
     return augmented_videos
