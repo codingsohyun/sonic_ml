@@ -1,98 +1,103 @@
 import cv2
 import mediapipe as mp
-import os
 import numpy as np
-from data_augmentation import augment_video_frames  # 추가
+import os
+from data_augmentation import augment_video_frames
 
 mp_hands = mp.solutions.hands
-mp_pose = mp.solutions.pose
-hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.5)
-pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5)
+hands = mp_hands.Hands()
 
-def extract_features_from_video(video_path, augment=False, num_augments=5):
+def augment_data(frames):
+    augmented_data = [frames]  # 원본 프레임 추가
+    for aug_frames in augment_video_frames(frames, num_augments=5):
+        augmented_data.append(aug_frames)
+    return np.concatenate(augmented_data, axis=0)  # 프레임 차원 결합
+
+def augment_joint_data(joints):
+    augmented_joints = [joints]  # 원본 조인트 데이터 추가
+    for _ in range(5):  # 다양한 조인트 변형 추가
+        noise = np.random.normal(0, 0.01, joints.shape)  # 조인트에 작은 노이즈 추가
+        flipped_joints = joints * -1  # 좌우 반전
+        noisy_joints = joints + noise  # 노이즈 추가된 조인트
+        augmented_joints.append(flipped_joints)
+        augmented_joints.append(noisy_joints)
+    return np.concatenate(augmented_joints, axis=0)  # 모든 변형된 데이터를 결합
+
+def process_video(video_path):
     try:
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise ValueError(f"Unable to open video file: {video_path}")
         
-        frame_list = []
-        features = []
+        frames = []
+        joints_data = []
 
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
-
-            # 프레임이 None이 아닌지 확인
             if frame is None:
                 print(f"Warning: Skipping empty frame in video {video_path}")
                 continue
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # 흑백 확인 없이 바로 RGB 변환
+            results = hands.process(image)
 
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame_list.append(frame_rgb)  # 증강을 위해 원본 프레임 저장
+            if results.multi_hand_landmarks:
+                for hand_landmarks in results.multi_hand_landmarks:
+                    joints = [(lm.x, lm.y, lm.z) for lm in hand_landmarks.landmark]
+                    joints_data.append(joints)
+            frames.append(image)
 
         cap.release()
-        cv2.destroyAllWindows()
 
-        # 데이터 증강 여부에 따라 증강된 프레임 생성
-        if augment:
-            augmented_frames = augment_video_frames(frame_list, num_augments=num_augments)
-            frame_list = [frame for frames in augmented_frames for frame in frames]  # 4D 차원 맞추기
+        frames = augment_data(frames)  # 프레임 데이터 증강
+        if len(joints_data) > 0:
+            joints_data = augment_joint_data(np.array(joints_data))  # 조인트 데이터 변형
+        else:
+            print(f"No hand landmarks found in video {video_path}")
 
-        # 프레임별 특징 추출
-        for frame_rgb in frame_list:
-            hand_results = hands.process(frame_rgb)
-            pose_results = pose.process(frame_rgb)
-            frame_features = {}
+        return joints_data
 
-            # 손 특징 추출
-            if hand_results.multi_hand_landmarks:
-                for hand_landmarks in hand_results.multi_hand_landmarks:
-                    hand_data = [(landmark.x, landmark.y, landmark.z) for landmark in hand_landmarks.landmark]
-                    frame_features['hand'] = hand_data
-
-            # 신체 특징 추출
-            if pose_results.pose_landmarks:
-                pose_data = [(landmark.x, landmark.y, landmark.z) for landmark in pose_results.pose_landmarks.landmark]
-                frame_features['pose'] = pose_data
-
-            if frame_features:
-                features.append(frame_features)
-
-        return features
-
+    except cv2.error as e:
+        print(f"OpenCV error processing video {video_path}: {e}")
+        return np.array([])
     except Exception as e:
-        print(f"Error processing video {video_path}: {str(e)}")
-        return []  # 오류 발생 시 빈 리스트 반환
+        print(f"Error processing video {video_path}: {e}")
+        return np.array([])
 
-def process_dataset(dataset_dir, augment=False, num_augments=5):
-    try:
-        word_classes = os.listdir(dataset_dir)
-        for word_class in word_classes:
-            class_dir = os.path.join(dataset_dir, word_class)
-            if not os.path.isdir(class_dir):
-                continue
+def save_data_for_all_classes(video_dir):
+    all_data = []
+    all_labels = []
 
-            videos = [f for f in os.listdir(class_dir) if f.endswith('.mp4')]
-            for video in videos:
-                video_path = os.path.join(class_dir, video)
-                print(f'Processing {video_path}...')
+    for class_dir in sorted(os.listdir(video_dir)):
+        class_path = os.path.join(video_dir, class_dir)
+        if os.path.isdir(class_path):
+            try:
+                label = int(class_dir)
+                print(f"Processing class: {class_dir}, label: {label}")
+                videos = [f for f in os.listdir(class_path) if f.endswith('.mp4')]
+                if not videos:
+                    print(f"No video files found in class directory: {class_dir}")
+                for video in videos:
+                    video_path = os.path.join(class_path, video)
+                    joints_data = process_video(video_path)
+                    if joints_data.size > 0:
+                        all_data.extend(joints_data)
+                        all_labels.extend([label] * len(joints_data))
+            except ValueError:
+                print(f"Skipping non-numeric folder: {class_dir}")
+            except Exception as e:
+                print(f"Error processing class {class_dir}: {e}")
 
-                try:
-                    # 비디오에서 특징 추출 (증강 적용)
-                    features = extract_features_from_video(video_path, augment=augment, num_augments=num_augments)
+    return np.array(all_data), np.array(all_labels)
 
-                    if features:  # 특징이 비어 있지 않은 경우에만 저장
-                        save_path = os.path.join(class_dir, f'{os.path.splitext(video)[0]}_features.npy')
-                        np.save(save_path, features)
-                        print(f'Features saved to {save_path}')
-                    else:
-                        print(f"No features extracted from {video_path}")
-                except Exception as e:
-                    print(f"Error processing {video_path}: {str(e)}")
-    except Exception as e:
-        print(f"Error processing dataset directory {dataset_dir}: {str(e)}")
+if __name__ == "__main__":
+    video_dir = '/mnt/8TB_2/sohyun/sonic/sonic_ml/raw_dataset/words'
+    data, labels = save_data_for_all_classes(video_dir)
 
-if __name__ == "__main__": 
-    dataset_path = r'/mnt/8TB_2/sohyun/sonic/sonic_ml/raw_dataset/words'
-    process_dataset(dataset_path, augment=True, num_augments=5)
+    output_dir = '/mnt/8TB_2/sohyun/sonic/sonic_ml/outputs'
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    np.save(os.path.join(output_dir, 'body_joint_data.npy'), data)
+    np.save(os.path.join(output_dir, 'body_labels.npy'), labels)

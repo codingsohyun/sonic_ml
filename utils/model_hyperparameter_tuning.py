@@ -129,32 +129,32 @@ def hyperparameter_tuning(X_train, y_train, param_grid, input_size, num_classes)
 
     return best_params, best_accuracy
 
-# 하이퍼파라미터 탐색 실행
-if __name__ == "__main__":
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# # 하이퍼파라미터 탐색 실행
+# if __name__ == "__main__":
+#     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    dataset_path = r'D:/sonic_ml/raw_dataset/words'
-    features, labels = load_features_and_labels(dataset_path)
-    features, labels = shuffle(features, labels)
+#     dataset_path = r'D:/sonic_ml/raw_dataset/words'
+#     features, labels = load_features_and_labels(dataset_path)
+#     features, labels = shuffle(features, labels)
 
-    # 레이블을 숫자로 변환
-    label_encoder = LabelEncoder()
-    integer_encoded_labels = label_encoder.fit_transform(labels)
+#     # 레이블을 숫자로 변환
+#     label_encoder = LabelEncoder()
+#     integer_encoded_labels = label_encoder.fit_transform(labels)
 
-    # 학습셋과 테스트셋 분리
-    X_train, X_test, y_train, y_test = train_test_split(features, integer_encoded_labels, test_size=0.2, random_state=42)
+#     # 학습셋과 테스트셋 분리
+#     X_train, X_test, y_train, y_test = train_test_split(features, integer_encoded_labels, test_size=0.2, random_state=42)
 
-    input_size = X_train[0].shape[1] if len(X_train) > 0 else 0  # 특징의 차원 수
-    num_classes = len(np.unique(labels))
+#     input_size = X_train[0].shape[1] if len(X_train) > 0 else 0  # 특징의 차원 수
+#     num_classes = len(np.unique(labels))
 
-    # 하이퍼파라미터 범위 설정
-    param_grid = {
-        'hidden_size': [64, 128, 256],
-        'num_layers': [1, 2, 3],
-        'learning_rate': [0.001, 0.0001],
-        'batch_size': [16, 32, 64],
-        'epochs': [10, 20]
-    }
+#     # 하이퍼파라미터 범위 설정
+#     param_grid = {
+#         'hidden_size': [64, 128, 256],
+#         'num_layers': [1, 2, 3],
+#         'learning_rate': [0.001, 0.0001],
+#         'batch_size': [16, 32, 64],
+#         'epochs': [10, 20]
+#     }
 
-    best_params, best_accuracy = hyperparameter_tuning(X_train, y_train, param_grid, input_size, num_classes)
-    print(f"Best params: {best_params}, Best accuracy: {best_accuracy:.4f}")
+#     best_params, best_accuracy = hyperparameter_tuning(X_train, y_train, param_grid, input_size, num_classes)
+#     print(f"Best params: {best_params}, Best accuracy: {best_accuracy:.4f}")

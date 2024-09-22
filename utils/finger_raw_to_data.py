@@ -105,9 +105,10 @@ if __name__ == "__main__":
     video_dir = '/mnt/8TB_2/sohyun/sonic/sonic_ml/raw_dataset/letters'  # 각 클래스 폴더가 위치한 경로
     data, labels = save_data_for_all_classes(video_dir)
 
-    output_dir = 'D:/sonic_ml/outputs'
+    output_dir = '/mnt/8TB_2/sohyun/sonic/sonic_ml/outputs'  # 경로 수정
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
     np.save(os.path.join(output_dir, 'hand_joint_data.npy'), data)
     np.save(os.path.join(output_dir, 'hand_labels.npy'), labels)
+
