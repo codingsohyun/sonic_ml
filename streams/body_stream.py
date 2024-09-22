@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append('D:/sonic_ml')
+
 import cv2
 import mediapipe as mp
 from models.body.body_inference import body_inference

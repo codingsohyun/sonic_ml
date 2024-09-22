@@ -1,11 +1,12 @@
 import os
-import numpy as np
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.neighbors import KNeighborsClassifier
+import numpy as np  # GPU 연산 없이 numpy로 처리
+from cuml.neighbors import KNeighborsClassifier  # cuML의 GPU 기반 KNN
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pickle  # cuML 모델은 pickle로 저장
 
 def load_data(output_dir):
     # 데이터 파일 경로 설정
@@ -23,20 +24,17 @@ def load_data(output_dir):
     # 데이터 차원 변경 (2D로 변환)
     data = data.reshape(data.shape[0], -1)
     print(f"Data shape: {data.shape}, Labels shape: {labels.shape}")
+
     return data, labels
 
 def tune_knn_model(X_train, y_train):
-    # 하이퍼파라미터 튜닝을 위한 GridSearchCV 설정
-    print("Tuning KNN model using GridSearchCV...")
-    param_grid = {'n_neighbors': [3, 5, 7, 9]}
-    knn = KNeighborsClassifier()
+    # KNeighborsClassifier는 cuML에서 제공하는 GPU 기반 모델
+    print("Tuning KNN model...")
+    knn = KNeighborsClassifier(n_neighbors=5)  # KNeighborsClassifier (cuML)
 
-    # GridSearchCV를 사용하여 최적의 n_neighbors 찾기
-    grid_search = GridSearchCV(knn, param_grid, cv=5, verbose=2)  # verbose 옵션을 통해 프로세스 출력
-    grid_search.fit(X_train, y_train)
-
-    print(f"Best parameters found: {grid_search.best_params_}")
-    return grid_search.best_estimator_
+    # 모델 학습
+    knn.fit(X_train, y_train)
+    return knn
 
 def evaluate_model(model, X_test, y_test):
     # 테스트셋 평가
@@ -68,10 +66,11 @@ def save_model_and_results(model, output_dir, y_test, y_pred):
     print("Classification Report:")
     print(classification_report(y_test, y_pred))
 
-    # 학습된 모델 저장
+    # 학습된 모델 저장 (cuML 모델은 joblib 대신 pickle로 저장해야 함)
     model_path = os.path.join(output_dir, 'knn_finger_spelling_model.pkl')
     print(f"Saving model to {model_path}...")
-    joblib.dump(model, model_path)
+    with open(model_path, 'wb') as f:
+        pickle.dump(model, f)
     print(f"Model saved at {model_path}")
 
 if __name__ == "__main__":
@@ -86,7 +85,7 @@ if __name__ == "__main__":
     print("Splitting data into training and testing sets...")
     X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, random_state=42)
 
-    # KNN 모델 하이퍼파라미터 튜닝 및 학습
+    # KNN 모델 학습
     print("Starting model training...")
     best_knn = tune_knn_model(X_train, y_train)
 

@@ -43,7 +43,7 @@ def finger_learn():
     result = 1 if predicted_class == finger_id else 0
     # 확인..
     print(result)
-    return render_template('finger_learn.html', result=result, video_feed_url='/video_feed_finger')
+    return render_template('index.html', result=result, video_feed_url='/video_feed_finger')
 
 # 지문자 퀴즈 
 @app.route('/finger_quiz', methods=['POST'])
@@ -68,7 +68,7 @@ def finger_quiz():
 
     result_event.set()
 
-    return render_template('finger_learn.html', result=result, video_feed_url='/video_feed_finger')
+    return render_template('index.html', result=result, video_feed_url='/video_feed_finger')
 
 # 단어 배우기
 @app.route('/body_learn', methods=['POST'])
@@ -84,7 +84,7 @@ def body_learn():
     # 맞았으면 1, 틀렸으면 0이라고 연송이한테 넘겨주기
     result = 1 if predicted_class == body_id else 0
 
-    return render_template('body_learn.html', result=result, video_feed_url='/video_feed_body')
+    return render_template('index.html', result=result, video_feed_url='/video_feed_body')
 
 # 단어 퀴즈 
 @app.route('/body_quiz', methods=['POST'])
@@ -109,7 +109,7 @@ def body_quiz():
 
     result_event.set()
 
-    return render_template('body_quiz.html', result=response_data['result'], video_feed_url='/video_feed_body')
+    return render_template('index.html', result=response_data['result'], video_feed_url='/video_feed_body')
 
 
 if __name__ == "__main__":

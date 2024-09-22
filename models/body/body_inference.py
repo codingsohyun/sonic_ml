@@ -4,7 +4,7 @@ import torch.nn as nn
 import mediapipe as mp
 import cv2  # OpenCV 임포트
 
-# PyTorch LSTM 모델 정의
+# PyTorch LSTM 모델 정의 (body_model.py와 일치)
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_classes):
         super(LSTMModel, self).__init__()
@@ -22,8 +22,18 @@ class LSTMModel(nn.Module):
 
 # PyTorch로 학습된 모델 로드
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = LSTMModel(input_size=99, hidden_size=128, num_layers=2, num_classes=10)  # 입력 크기, 은닉층 크기, LSTM 레이어 수 및 클래스 수
-model.load_state_dict(torch.load('models/body/lstm_sign_language_model.pth', map_location=device))
+
+# 모델 경로 수정 (모델 저장 위치와 동일하게 설정)
+model_path = 'D:\sonic_ml\outputs\new_lstm_sign_language_model.pth'
+
+# input_size, hidden_size, num_layers와 num_classes는 학습된 모델에 맞춰 설정
+input_size = 162  # 162 for hand + pose landmarks
+hidden_size = 128  # 학습된 모델에서 hidden_size=128로 설정됨
+num_layers = 2     # 학습된 모델에서 num_layers=2로 설정됨
+num_classes = 10   # 10개의 클래스 (0-9)
+
+model = LSTMModel(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, num_classes=num_classes)
+model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
 model.eval()
 
@@ -32,7 +42,6 @@ mp_pose = mp.solutions.pose
 pose = mp_pose.Pose()
 
 def extract_keypoints(results):
-
     if results.pose_landmarks:
         # 관절 좌표를 [x, y, z] 형태로 추출한 후 평탄화
         keypoints = np.array([[res.x, res.y, res.z] for res in results.pose_landmarks.landmark]).flatten()
@@ -42,7 +51,6 @@ def extract_keypoints(results):
     return keypoints
 
 def body_inference(frame):
-
     # 프레임을 RGB로 변환하여 Mediapipe에 입력
     image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = pose.process(image_rgb)

@@ -5,23 +5,52 @@ import os
 from data_augmentation import augment_video_frames
 
 mp_hands = mp.solutions.hands
+mp_pose = mp.solutions.pose
 hands = mp_hands.Hands()
+pose = mp_pose.Pose()
 
 def augment_data(frames):
-    augmented_data = [frames]  # 원본 프레임 추가
+    augmented_data = [frames]  # Original frames
     for aug_frames in augment_video_frames(frames, num_augments=5):
         augmented_data.append(aug_frames)
-    return np.concatenate(augmented_data, axis=0)  # 프레임 차원 결합
+    return np.concatenate(augmented_data, axis=0)  # Concatenate frames
 
 def augment_joint_data(joints):
-    augmented_joints = [joints]  # 원본 조인트 데이터 추가
-    for _ in range(5):  # 다양한 조인트 변형 추가
-        noise = np.random.normal(0, 0.01, joints.shape)  # 조인트에 작은 노이즈 추가
-        flipped_joints = joints * -1  # 좌우 반전
-        noisy_joints = joints + noise  # 노이즈 추가된 조인트
+    augmented_joints = [joints]  # Original joint data
+    for _ in range(5):  # Add variations to the joint data
+        noise = np.random.normal(0, 0.01, joints.shape)  # Add noise
+        flipped_joints = joints * -1  # Flip the joints
+        noisy_joints = joints + noise  # Add noise
         augmented_joints.append(flipped_joints)
         augmented_joints.append(noisy_joints)
-    return np.concatenate(augmented_joints, axis=0)  # 모든 변형된 데이터를 결합
+    return np.concatenate(augmented_joints, axis=0)  # Concatenate joint data
+
+# 손과 포즈 랜드마크 데이터를 결합하여 99차원 배열을 반환하는 함수
+def extract_pose_hand_keypoints(results_hand, results_pose):
+    hand_keypoints = []
+    pose_keypoints = []
+
+    # 손 랜드마크 처리 (21개 랜드마크)
+    if results_hand.multi_hand_landmarks:
+        for hand_landmarks in results_hand.multi_hand_landmarks:
+            hand_keypoints = [(lm.x, lm.y, lm.z) for lm in hand_landmarks.landmark]
+    else:
+        hand_keypoints = [(0, 0, 0)] * 21  # 감지되지 않으면 0으로 채움
+
+    # 포즈 랜드마크 처리 (33개 랜드마크)
+    if results_pose.pose_landmarks:
+        pose_keypoints = [(lm.x, lm.y, lm.z) for lm in results_pose.pose_landmarks.landmark]
+    else:
+        pose_keypoints = [(0, 0, 0)] * 33  # 감지되지 않으면 0으로 채움
+
+    # 손과 포즈 랜드마크 데이터를 결합 (21 * 3 + 33 * 3 = 99차원)
+    combined_keypoints = np.array(hand_keypoints + pose_keypoints).flatten()  # 1차원으로 변환
+
+    # import pdb
+    # pdb.set_trace()
+    # 데이터 크기 출력 (99차원이 되는지 확인)
+    print(f"Extracted keypoints shape: {combined_keypoints.shape}")  # (99,)로 나와야 함
+    return combined_keypoints
 
 def process_video(video_path):
     try:
@@ -39,22 +68,21 @@ def process_video(video_path):
             if frame is None:
                 print(f"Warning: Skipping empty frame in video {video_path}")
                 continue
-            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # 흑백 확인 없이 바로 RGB 변환
-            results = hands.process(image)
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results_hand = hands.process(image)
+            results_pose = pose.process(image)
 
-            if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
-                    joints = [(lm.x, lm.y, lm.z) for lm in hand_landmarks.landmark]
-                    joints_data.append(joints)
+            joints = extract_pose_hand_keypoints(results_hand, results_pose)
+            joints_data.append(joints)
             frames.append(image)
 
         cap.release()
 
-        frames = augment_data(frames)  # 프레임 데이터 증강
+        frames = augment_data(frames)  # Augment frames
         if len(joints_data) > 0:
-            joints_data = augment_joint_data(np.array(joints_data))  # 조인트 데이터 변형
+            joints_data = augment_joint_data(np.array(joints_data))  # Augment joint data
         else:
-            print(f"No hand landmarks found in video {video_path}")
+            print(f"No landmarks found in video {video_path}")
 
         return joints_data
 

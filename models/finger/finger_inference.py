@@ -2,12 +2,20 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import joblib  # 모델 저장 및 로드용 라이브러리
+import os
 
+# 미디어파이프 설정
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands()
 mp_drawing = mp.solutions.drawing_utils
 
-knn = joblib.load('knn_finger_spelling_model.pkl')  # 사전에 학습된 모델 로드
+# 사전에 학습된 모델 로드 (전체 경로로 변경)
+model_path = 'D:/sonic_ml/outputs/knn_finger_spelling_model.pkl'
+if os.path.exists(model_path):
+    knn = joblib.load(model_path)
+else:
+    raise FileNotFoundError(f"The model file was not found at {model_path}")
+
 
 def finger_inference(frame):
     # MediaPipe를 통해 손 관절을 추출
