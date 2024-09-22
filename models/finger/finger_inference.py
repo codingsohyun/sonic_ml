@@ -10,7 +10,7 @@ hands = mp_hands.Hands()
 mp_drawing = mp.solutions.drawing_utils
 
 # 사전에 학습된 모델 로드 (전체 경로로 변경)
-model_path = 'D:/sonic_ml/outputs/knn_finger_spelling_model.pkl'
+model_path = '/home/ec2-user/sonic_ml/outputs/knn_finger_spelling_model.pkl'
 if os.path.exists(model_path):
     knn = joblib.load(model_path)
 else:

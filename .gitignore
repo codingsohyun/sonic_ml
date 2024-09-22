@@ -2,3 +2,4 @@ outputs/
 raw_dataset/
 .venv/
 __pycache__/
+sonic.pem

@@ -24,7 +24,7 @@ class LSTMModel(nn.Module):
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # 모델 경로 수정 (모델 저장 위치와 동일하게 설정)
-model_path = 'D:/sonic_ml/outputs/new_lstm_sign_language_model.pth'
+model_path = '/home/ec2-user/sonic_ml/outputs/new_lstm_sign_language_model.pth'
 
 # input_size, hidden_size, num_layers와 num_classes는 학습된 모델에 맞춰 설정
 input_size = 162  # 162 for hand + pose landmarks
